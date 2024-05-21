@@ -1,15 +1,17 @@
+import copy
+import glob
+import os
+import random
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-from .KANLayer import *
-from .Symbolic_KANLayer import *
-from .LBFGS import *
-import os
-import glob
-import matplotlib.pyplot as plt
 from tqdm import tqdm
-import random
-import copy
+
+from .KANLayer import *
+from .LBFGS import *
+from .Symbolic_KANLayer import *
 
 
 class KAN(nn.Module):
@@ -161,7 +163,7 @@ class KAN(nn.Module):
 
         self.symbolic_fun = nn.ModuleList(self.symbolic_fun)
         self.symbolic_enabled = symbolic_enabled
-        
+
         self.device = device
 
     def initialize_from_another_model(self, another_model, x):
@@ -759,7 +761,7 @@ class KAN(nn.Module):
             plt.gcf().get_axes()[0].text(0.5, y0 * (len(self.width) - 1) + 0.2, title, fontsize=40 * scale, horizontalalignment='center', verticalalignment='center')
 
     def train(self, dataset, opt="LBFGS", steps=100, log=1, lamb=0., lamb_l1=1., lamb_entropy=2., lamb_coef=0., lamb_coefdiff=0., update_grid=True, grid_update_num=10, loss_fn=None, lr=1., stop_grid_update_step=50, batch=-1,
-              small_mag_threshold=1e-16, small_reg_factor=1., metrics=None, sglr_avoid=False, save_fig=False, in_vars=None, out_vars=None, beta=3, save_fig_freq=1, img_folder='./video', device='cpu'):
+              small_mag_threshold=1e-16, small_reg_factor=1., metrics=None, sglr_avoid=False, save_fig=False, in_vars=None, out_vars=None, beta=3, save_fig_freq=1, img_folder='./video', device='cpu', early_stopping=None):
         '''
         training
 
@@ -930,6 +932,15 @@ class KAN(nn.Module):
                 self.plot(folder=img_folder, in_vars=in_vars, out_vars=out_vars, title="Step {}".format(_), beta=beta)
                 plt.savefig(img_folder + '/' + str(_) + '.jpg', bbox_inches='tight', dpi=200)
                 plt.close()
+
+            # Check early stopping
+            if early_stopping:
+                train_loss = results['train_loss'][-1]
+                test_loss = results['test_loss'][-1]
+                early_stopping(train_loss, test_loss)
+                if early_stopping.early_stop:
+                    print("STOPPING EARLY")
+                    break
 
         return results
 
@@ -1245,11 +1256,9 @@ class KAN(nn.Module):
 
             assert len(output_layer) == len(means), 'output_normalizer does not match the output layer'
             assert len(output_layer) == len(stds), 'output_normalizer does not match the output layer'
-            
+
             output_layer = [(output_layer[i] * stds[i] + means[i]) for i in range(len(output_layer))]
             symbolic_acts[-1] = output_layer
-
-
 
         self.symbolic_acts = [[ex_round(symbolic_acts[l][i]) for i in range(len(symbolic_acts[l]))] for l in range(len(symbolic_acts))]
 
