@@ -935,7 +935,12 @@ class KAN(nn.Module):
 
             train_loss = results['train_loss'][-1]
             test_loss = results['test_loss'][-1]
-            
+
+            # save out the best_model to restore later
+            is_min_train = (test_loss < min(results['test_loss'][:-1]))
+            if is_min_train:
+                results["best_model"] = copy.deepcopy(self.state_dict())
+
             # Check early stopping
             if early_stopping:
                 early_stopping(train_loss, test_loss)
@@ -946,6 +951,9 @@ class KAN(nn.Module):
             # network weights are garbage, bailout
             if np.isnan(train_loss) or np.isnan(test_loss):
                 break
+
+        if "best_model" in results:
+            self.load_state_dict(results["best_model"])
 
         return results
 
