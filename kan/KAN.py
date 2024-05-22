@@ -933,14 +933,19 @@ class KAN(nn.Module):
                 plt.savefig(img_folder + '/' + str(_) + '.jpg', bbox_inches='tight', dpi=200)
                 plt.close()
 
+            train_loss = results['train_loss'][-1]
+            test_loss = results['test_loss'][-1]
+            
             # Check early stopping
             if early_stopping:
-                train_loss = results['train_loss'][-1]
-                test_loss = results['test_loss'][-1]
                 early_stopping(train_loss, test_loss)
                 if early_stopping.early_stop:
                     print("STOPPING EARLY")
                     break
+
+            # network weights are garbage, bailout
+            if np.isnan(train_loss) or np.isnan(test_loss):
+                break
 
         return results
 
