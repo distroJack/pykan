@@ -937,7 +937,12 @@ class KAN(nn.Module):
             test_loss = results['test_loss'][-1]
 
             # save out the best_model to restore later
-            is_min_train = (test_loss < min(results['test_loss'][:-1]))
+            is_min_train = False
+            if (len(results['test_loss']) == 1):
+                is_min_train = True 
+            else:
+                is_min_train = (test_loss < min(results['test_loss'][:-1]))
+
             if is_min_train:
                 results["best_model"] = copy.deepcopy(self.state_dict())
 
