@@ -103,8 +103,29 @@ def coef2curve(x_eval, grid, coef, k, device="cpu"):
     y_eval = torch.einsum('ij,ijk->ik', coef, B_batch(x_eval, grid, k, device=device))
     return y_eval
 
+def svdestimator(A, B):
+    # Initialize an empty tensor to store the results
+    results = torch.empty(
+        A.shape[0], A.shape[2], B.shape[2], device=A.device, dtype=A.dtype
+    )
 
-def curve2coef(x_eval, y_eval, grid, k, device="cpu"):
+    # Process each item in the batch
+    for i in range(A.shape[0]):
+        # Compute the SVD of each matrix A[i]
+        U, S, Vh = torch.linalg.svd(A[i], full_matrices=False)
+
+        # Calculate the pseudo-inverse of A[i]
+        # We use a small value to avoid division by very small numbers for stability
+        S_inv = torch.diag(1.0 / S[S > 1e-5])
+        A_pinv = Vh.T[:, : S_inv.size(0)] @ S_inv @ U.T[: S_inv.size(0), :]
+
+        # Solve the least squares problem using the pseudo-inverse
+        results[i] = A_pinv @ B[i]
+
+    return results
+
+
+def curve2coef(x_eval, y_eval, grid, k, device="cpu", method="svd"):
     '''
     converting B-spline curves to B-spline coefficients using least squares.
     
@@ -133,8 +154,26 @@ def curve2coef(x_eval, y_eval, grid, k, device="cpu"):
     torch.Size([5, 13])
     '''
     # x_eval: (size, batch); y_eval: (size, batch); grid: (size, grid); k: scalar
-    mat = B_batch(x_eval, grid, k, device=device).permute(0, 2, 1)
-    # coef = torch.linalg.lstsq(mat, y_eval.unsqueeze(dim=2)).solution[:, :, 0]
-    coef = torch.linalg.lstsq(mat.to(device), y_eval.unsqueeze(dim=2).to(device),
-                              driver='gelsy' if device == 'cpu' else 'gels').solution[:, :, 0]
+    mat = (
+        B_batch(x_eval, grid, k, device=device).permute(0, 2, 1).to(y_eval.dtype)
+    )  # mat can be ill-conditioned
+
+    if method == "lstsq":
+        coef = torch.linalg.lstsq(
+            mat.to(device),
+            y_eval.unsqueeze(dim=2).to(device),
+            driver="gelsy" if device == "cpu" else "gels",
+            rcond=1e-7,
+        ).solution[:, :, 0]
+        # Note:
+        # 1. The GPU version 'gels' may lead to divergence in some cases,
+        # 2. Ill-conditioned mat leads to nan in coef.
+        # 3. The 'rcond' parameter is used to avoid the ill-conditioned problem. test: fix the rcond
+        # solution 2: convert nan to 0 in torch
+        if torch.isnan(coef).any() == True:
+            coef = torch.nan_to_num(coef, nan=0.0, posinf=0.0, neginf=0.0)
+    else:
+        # solution 1: a temporary alternative solution for cuda operation (more time consuming than lstsq) to solve the ill-conditioning problem
+        coef = svdestimator(mat, y_eval.unsqueeze(dim=2)).view(mat.shape[0], -1)
+
     return coef.to(device)
