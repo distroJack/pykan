@@ -761,7 +761,7 @@ class KAN(nn.Module):
             plt.gcf().get_axes()[0].text(0.5, y0 * (len(self.width) - 1) + 0.2, title, fontsize=40 * scale, horizontalalignment='center', verticalalignment='center')
 
     def train(self, dataset, opt="LBFGS", steps=100, log=1, lamb=0., lamb_l1=1., lamb_entropy=2., lamb_coef=0., lamb_coefdiff=0., update_grid=True, grid_update_num=10, loss_fn=None, lr=1., stop_grid_update_step=50, batch=-1,
-              small_mag_threshold=1e-16, small_reg_factor=1., metrics=None, sglr_avoid=False, save_fig=False, in_vars=None, out_vars=None, beta=3, save_fig_freq=1, img_folder='./video', device='cpu', early_stopping=None):
+              small_mag_threshold=1e-16, small_reg_factor=1., metrics=None, sglr_avoid=False, save_fig=False, in_vars=None, out_vars=None, beta=3, save_fig_freq=1, img_folder='./video', device='cpu', early_stopping=None, save_best=True):
         '''
         training
 
@@ -957,7 +957,7 @@ class KAN(nn.Module):
             if np.isnan(train_loss) or np.isnan(test_loss):
                 break
 
-        if "best_model" in results:
+        if save_best and "best_model" in results:
             self.load_state_dict(results["best_model"])
 
         return results
